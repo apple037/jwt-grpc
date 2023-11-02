@@ -1,4 +1,4 @@
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation, get_current_timestamp, decode_header};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation, get_current_timestamp};
 use jsonwebtoken::errors::ErrorKind;
 use jsonwebtoken::Algorithm;
 use serde::{Deserialize, Serialize};
@@ -34,7 +34,7 @@ pub fn load_config() -> JWTConfig {
 
 pub fn issue_jwt_token(email: &str, password: &str) -> String {
     // TODO: check email and password to determine subject
-    let mut typ;
+    let typ;
     if email.ends_with("@colond.com") {
         typ = ":D";
     } else {
