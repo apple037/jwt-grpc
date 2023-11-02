@@ -1,4 +1,4 @@
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation, get_current_timestamp};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation, get_current_timestamp, decode_header};
 use jsonwebtoken::errors::ErrorKind;
 use jsonwebtoken::Algorithm;
 use serde::{Deserialize, Serialize};
@@ -19,8 +19,9 @@ pub struct Claims {
     pub sub: String,
     pub iat: u64,
     pub exp: u64,
-    pub email: String,
     pub iss: String,
+    pub typ: String,
+    pub email: String
 }
 
 pub fn load_config() -> JWTConfig {
@@ -33,28 +34,31 @@ pub fn load_config() -> JWTConfig {
 
 pub fn issue_jwt_token(email: &str, password: &str) -> String {
     // TODO: check email and password to determine subject
-    let mut subject;
+    let mut typ;
     if email.ends_with("@colond.com") {
-        subject = ":D";
+        typ = ":D";
     } else {
-        subject = "guest";
+        typ = "guest";
     }
-    // TODO Validate email and password length
-    debug!("[JWT Impl]A user login: {} with password: {}", email, password);
+    // TODO Validate email and password
+    debug!("[IssueToken]A user login: {} with password: {}", email, password);
     let jwt_config = load_config();
     let secret = jwt_config.secret;
-    // TODO set iat to current timestamp and exp to 30 seconds later
+    // set iat to current timestamp and exp to 30 seconds later
     let iat = get_current_timestamp();
     let exp = iat + 30;
     let claims = Claims {
-        sub: subject.to_owned(), // Subject: to what the token refers to
+        sub: "Colon D Face :)".to_string(), // Subject: to what the token refers to
         iat: iat,
         exp: exp,
-        email: email.to_owned(), // Audience: to whom the token is intended for
+        email: email.to_owned(),
         iss: "ColonD".to_owned(), // Issuer
+        typ: typ.to_owned(), // Type
     };
+    debug!("[IssueToken]Claims: {:?}", claims);
     // Custom header
-    let header = Header::new(Algorithm::HS256);
+    let mut header = Header::new(Algorithm::HS256);
+    header.typ = Some("JWT".to_owned());
     let token = encode(
         &header,
         &claims,
@@ -80,27 +84,27 @@ pub fn get_info_from_token(_token: &str) -> Result<Claims, jsonwebtoken::errors:
         Err(err) => match *err.kind() {
             // Return error message not panic
             ErrorKind::InvalidToken => {
-                error!("[JWT Impl]Invalid token");
+                error!("[GetInfoFromToken]Invalid token");
                 return Err(err);
             }
             ErrorKind::InvalidIssuer => {
-                error!("[JWT Impl]Invalid issuer");
+                error!("[GetInfoFromToken]Invalid issuer");
                 return Err(err);
             }
             ErrorKind::InvalidSubject => {
-                error!("[JWT Impl]Invalid subject");
+                error!("[GetInfoFromToken]Invalid subject");
                 return Err(err);
             }
             ErrorKind::ExpiredSignature => {
-                error!("[JWT Impl]Expired signature");
+                error!("[GetInfoFromToken]Expired signature");
                 return Err(err);
             }
             ErrorKind::InvalidAudience => {
-                error!("[JWT Impl]Invalid audience");
+                error!("[GetInfoFromToken]Invalid audience");
                 return Err(err);
             }
             _ => {
-                error!("[JWT Impl]Unknown error: {}", err);
+                error!("[GetInfoFromToken]Unknown error: {}", err);
                 return Err(err);
             }
         },

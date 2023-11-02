@@ -6,7 +6,7 @@ use log::{debug,info};
 use tonic::{transport::Server, Request, Response, Status};
 
 use jwt::jwt_service_server::{JwtService, JwtServiceServer};
-use jwt::{ExchangeTokenRequest, ExchangeTokenResponse, GetTokenInfoRequest, GetTokenInfoResponse, RevokeTokenRequest, RevokeTokenResponse};
+use jwt::{ExchangeTokenRequest, ExchangeTokenResponse, EmptyRequest, GetTokenInfoResponse, RevokeTokenResponse};
 
 pub mod jwt {
     tonic::include_proto!("jwt");
@@ -21,7 +21,7 @@ impl JwtService for JWT {
         &self,
         request: Request<ExchangeTokenRequest>,
     ) -> Result<Response<ExchangeTokenResponse>, Status> {
-        debug!("[SERVER]Got a ExchangeTokenRequest: {:?}", request);
+        debug!("[IssueToken]Got a ExchangeTokenRequest: {:?}", request);
         let rq = request.into_inner();
         let access_token = jwt_impl::issue_jwt_token(rq.email.as_str(), rq.password.as_str());
         let response = ExchangeTokenResponse {
@@ -32,10 +32,20 @@ impl JwtService for JWT {
 
     async fn get_token_info(
         &self,
-        request: Request<GetTokenInfoRequest>,
+        request: Request<EmptyRequest>,
     ) -> Result<Response<GetTokenInfoResponse>, Status> {
-        debug!("[SERVER]Got a GetTokenInfoRequest: {:?}", request);
-        let result = jwt_impl::get_info_from_token(request.into_inner().token.as_str());
+        // Get header from request
+        let header = request.metadata().get("authorization");
+        // Check if header is empty
+        if header.is_none() {
+            return Err(Status::invalid_argument("No token provided"));
+        }
+        // remove Bearer from header if start with Bearer
+        if (header.unwrap().to_str().unwrap().starts_with("Bearer ")) {
+            let _ = header.unwrap().to_str().unwrap().replace("Bearer ", "");
+        }
+        debug!("[GetInfoFromToken]Got a GetTokenInfoRequest: {:?}", request);
+        let result = jwt_impl::get_info_from_token(header.to_owned().unwrap().to_str().unwrap());
         // get email from Result<Claims>
         let claims = match result {
             Ok(result) => result,
@@ -47,16 +57,27 @@ impl JwtService for JWT {
             exp: unsigned_to_signed(claims.exp),
             email: claims.email,
             iss: claims.iss,
+            r#type: claims.typ,
         };
         Ok(Response::new(response))
     }
 
     async fn revoke_token(
         &self,
-        request: Request<RevokeTokenRequest>,
+        request: Request<EmptyRequest>,
     ) -> Result<Response<RevokeTokenResponse>, Status> {
+        // Get header from request
+        let header = request.metadata().get("authorization");
+        // remove Bearer from header if start with Bearer
+        if (header.unwrap().to_str().unwrap().starts_with("Bearer ")) {
+            let _ = header.unwrap().to_str().unwrap().replace("Bearer ", "");
+        }
+        // Check if header is empty
+        if header.is_none() {
+            return Err(Status::invalid_argument("No token provided"));
+        }
         debug!("[SERVER]Got a GetTokenInfoRequest: {:?}", request);
-        let bool = jwt_impl::revoke_token(request.into_inner().token.as_str());
+        let bool = jwt_impl::revoke_token(header.to_owned().unwrap().to_str().unwrap());
         let response = RevokeTokenResponse {
             success: bool,
         };
